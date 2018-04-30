@@ -4,7 +4,8 @@ import {
   getNamedType,
   GraphQLField,
   defaultFieldResolver,
-  GraphQLResolveInfo
+  GraphQLFieldResolver,
+  GraphQLResolveInfo,
 } from 'graphql';
 
 export class GraphQLExtension<TContext = any> {
@@ -103,7 +104,7 @@ export class GraphQLExtensionStack<TContext = any> {
       for (const handler of handlers) {
         handler(result);
       }
-    }
+    };
   }
 
   executionDidEnd() {
@@ -130,18 +131,32 @@ export class GraphQLExtensionStack<TContext = any> {
   }
 }
 
-export function enableGraphQLExtensions(schema: GraphQLSchema & { _extensionsEnabled?: boolean }) {
+export interface GraphQLServerOptions<TContext = any> {
+  fieldResolver?: GraphQLFieldResolver<any, any>;
+}
+
+export function enableGraphQLExtensions(
+  schema: GraphQLSchema & { _extensionsEnabled?: boolean },
+  options?: {
+    fieldResolver?: GraphQLFieldResolver<any, any>;
+  }
+) {
   if (schema._extensionsEnabled) {
     return schema;
   }
   schema._extensionsEnabled = true;
 
-  forEachField(schema, wrapField);
+  forEachField(schema, field => wrapField(field, options));
 
   return schema;
 }
 
-function wrapField(field: GraphQLField<any, any>): void {
+function wrapField(
+  field: GraphQLField<any, any>,
+  options: {
+    fieldResolver?: GraphQLFieldResolver<any, any>;
+  } = {}
+): void {
   const fieldResolver = field.resolve;
 
   field.resolve = (source, args, context, info) => {
@@ -152,7 +167,12 @@ function wrapField(field: GraphQLField<any, any>): void {
     // (which matches the behavior of graphql-js when there is no explicit resolve function defined).
     // TODO: Find a way to respect custom field resolvers, see https://github.com/graphql/graphql-js/pull/865
     try {
-      const result = (fieldResolver || defaultFieldResolver)(source, args, context, info);
+      const result = (fieldResolver || options.fieldResolver || defaultFieldResolver)(
+        source,
+        args,
+        context,
+        info
+      );
       whenResultIsFinished(result, () => {
         handler && handler(result);
       });

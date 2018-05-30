@@ -4,6 +4,7 @@ import {
   getNamedType,
   GraphQLField,
   defaultFieldResolver,
+  GraphQLFieldResolver,
   GraphQLResolveInfo,
   ExecutionArgs,
 } from 'graphql';
@@ -36,10 +37,16 @@ export class GraphQLExtension<TContext = any> {
 }
 
 export class GraphQLExtensionStack<TContext = any> {
+  public fieldResolver?: GraphQLFieldResolver<any, any>;
+
   private extensions: GraphQLExtension<TContext>[];
 
   constructor(extensions: GraphQLExtension<TContext>[]) {
     this.extensions = extensions;
+  }
+
+  public setFieldResolver(fieldResolver: GraphQLFieldResolver<any, any>): void {
+    this.fieldResolver = fieldResolver;
   }
 
   public requestDidStart(o: { request: Request }): EndHandler {
@@ -138,7 +145,7 @@ function wrapField(field: GraphQLField<any, any>): void {
     // (which matches the behavior of graphql-js when there is no explicit resolve function defined).
     // TODO: Find a way to respect custom field resolvers, see https://github.com/graphql/graphql-js/pull/865
     try {
-      const result = (fieldResolver || defaultFieldResolver)(
+      const result = (fieldResolver || extensionStack.fieldResolver || defaultFieldResolver)(
         source,
         args,
         context,
